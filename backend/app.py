@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend integration
+CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins in development
 
 @app.route("/upload-audio", methods=["POST"])
 def upload_audio():
@@ -15,13 +15,24 @@ def upload_audio():
     Handles single session analysis.
     """
     try:
+        print("\n=== New Upload Request ===")
+        print("Headers:", dict(request.headers))
+        print("Form data:", dict(request.form))
+        print("Files:", request.files.keys())
+        
         # Validate file in request
         if "file" not in request.files:
-            return jsonify({"error": "No file part"}), 400
+            print("Error: No file in request. Available keys:", request.files.keys())
+            return jsonify({"error": "No file found in request"}), 400
         
         file = request.files["file"]
         if file.filename == "":
+            print("Error: Empty filename")
             return jsonify({"error": "No selected file"}), 400
+        
+        print(f"Received file: {file.filename}")
+        print(f"Content Type: {file.content_type}")
+        print(f"File size: {request.content_length} bytes")
 
         # Get shadow_id from request or generate one
         shadow_id = request.form.get("shadow_id", f"shadow_{uuid.uuid4().hex[:8]}")
@@ -49,15 +60,20 @@ def upload_audio():
         
         # 4. Analyze for truth and deception patterns
         print("🕵️ Analyzing for truth and deception...")
-        revealed_truth, deception_patterns = analyze.extract_truth(cleaned_text, shadow_id)
+        analysis_result = analyze.extract_truth(cleaned_text, shadow_id)
         
         # 5. Generate final output
         print("📊 Generating analysis...")
-        final_json = output.generate_json(cleaned_text, revealed_truth, deception_patterns, shadow_id)
+        final_json = {
+            "transcript": cleaned_text,
+            "shadow_id": shadow_id,
+            "revealed_truth": analysis_result["revealed_truth"],
+            "deception_patterns": analysis_result["deception_patterns"]
+        }
         
         # 6. Save files for submission
         transcript_file = output.save_transcript(cleaned_text, shadow_id, 1)
-        json_file = output.save_final_json(revealed_truth, deception_patterns, shadow_id)
+        json_file = output.save_final_json(analysis_result["revealed_truth"], analysis_result["deception_patterns"], shadow_id)
         
         # Add file paths to response
         final_json["transcript_file"] = transcript_file
@@ -67,8 +83,11 @@ def upload_audio():
         return jsonify(final_json)
         
     except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
         print(f"❌ Error processing audio: {e}")
-        return jsonify({"error": f"Processing failed: {str(e)}"}), 500
+        print(tb)
+        return jsonify({"error": f"Processing failed: {str(e)}", "traceback": tb}), 500
 
 @app.route("/upload-multiple-sessions", methods=["POST"])
 def upload_multiple_sessions():
@@ -91,16 +110,25 @@ def upload_multiple_sessions():
                     filepath = f"uploads/{shadow_id}_session_{i}_{timestamp}_{file.filename}"
                     file.save(filepath)
                     
-                    # Process this session
-                    cleaned_audio = preprocess.clean_audio(filepath)
-                    transcript = stt.transcribe_audio(cleaned_audio)
-                    cleaned_text = postprocess.clean_text(transcript)
-                    revealed_truth, deception_patterns = analyze.extract_truth(cleaned_text, shadow_id)
+                    print(f"Processing session {i} audio file: {filepath}")
+                    try:
+                        # Process this session
+                        print("Cleaning audio...")
+                        cleaned_audio = preprocess.clean_audio(filepath)
+                        print("Transcribing audio...")
+                        transcript = stt.transcribe_audio(cleaned_audio)
+                        print("Cleaning text...")
+                        cleaned_text = postprocess.clean_text(transcript)
+                        print("Analyzing for truth...")
+                        analysis_result = analyze.extract_truth(cleaned_text, shadow_id)
+                    except Exception as e:
+                        print(f"Error processing session {i}: {e}")
+                        continue
                     
                     sessions_data.append({
                         "transcript": cleaned_text,
-                        "revealed_truth": revealed_truth,
-                        "deception_patterns": deception_patterns
+                        "revealed_truth": analysis_result["revealed_truth"],
+                        "deception_patterns": analysis_result["deception_patterns"]
                     })
         
         if not sessions_data:
@@ -140,4 +168,4 @@ def root():
 if __name__ == "__main__":
     print("🕵️ Truth Weaver - Whispering Shadows Mystery")
     print("🔍 AI Detective Service Starting...")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5001)

@@ -3,12 +3,25 @@ import json
 from collections import defaultdict, Counter
 from typing import Dict, List, Tuple, Any
 
-def extract_truth(transcript: str, shadow_id: str = "unknown") -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+def extract_truth(transcript: str, shadow_id: str = "unknown") -> Dict[str, Any]:
     """
     Advanced truth extraction for Whispering Shadows Mystery.
     Analyzes contradictions, deception patterns, and extracts most likely truth.
-    Returns (revealed_truth, deception_patterns).
+    Returns a single dictionary with both revealed_truth and deception_patterns.
     """
+    if not transcript or transcript.isspace():
+        return {
+            "shadow_id": shadow_id,
+            "revealed_truth": {
+                "programming_experience": "unknown",
+                "programming_language": "unknown",
+                "skill_mastery": "unknown",
+                "leadership_claims": "no leadership claims",
+                "team_experience": "unknown",
+                "skills_and_keywords": []
+            },
+            "deception_patterns": []
+        }
     
     # Extract key information patterns
     programming_experience = extract_programming_experience(transcript)

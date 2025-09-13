@@ -84,7 +84,7 @@ const Card = () => {
       formData.append('file', audioBlob, 'recording.wav');
       formData.append('shadow_id', `shadow_${Date.now()}`);
 
-      const response = await fetch('http://localhost:5001/upload-audio', {
+      const response = await fetch('/api/upload-audio', {
         method: 'POST',
         body: formData,
       });
