@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# App-generated folders
+backend/uploads/
+backend/transcripts/
+backend/output/
+
+# Node.js stuff
+node_modules/
+frontend/node_modules/
+
+# Logs
+*.log

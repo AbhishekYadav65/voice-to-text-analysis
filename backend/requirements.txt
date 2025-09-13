@@ -1,3 +1,11 @@
 flask
+flask-cors
 requests
 pydub
+openai-whisper
+torch
+torchaudio
+numpy
+scipy
+librosa
+soundfile

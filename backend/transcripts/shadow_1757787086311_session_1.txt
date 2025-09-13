@@ -1,0 +1,6 @@
+Shadow ID: shadow_1757787086311
+Session: 1
+Timestamp: 2025-09-13T23:44:05.479796
+==================================================
+
+Transcription failed: [WinError 2] The system cannot find the file specified

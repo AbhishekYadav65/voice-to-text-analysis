@@ -1,0 +1,22 @@
+{
+  "shadow_id": "test_shadow",
+  "revealed_truth": {
+    "programming_experience": "3-4 years",
+    "programming_language": "python",
+    "skill_mastery": "intermediate",
+    "leadership_claims": "fabricated",
+    "team_experience": "individual contributor",
+    "skills and other keywords": [
+      "Machine Learning"
+    ]
+  },
+  "deception_patterns": [
+    {
+      "lie_type": "experience_inflation",
+      "contradictory_claims": [
+        "6 years",
+        "3 years"
+      ]
+    }
+  ]
+}
