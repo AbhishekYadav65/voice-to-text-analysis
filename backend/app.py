@@ -1,171 +1,135 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from pipeline import preprocess, stt, postprocess, analyze, output
+# backend/app.py
 import os
 import uuid
+import json
+import traceback
 from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from werkzeug.utils import secure_filename
+
+from pipeline import preprocess, stt, postprocess, analyze, output
+
+ALLOWED_EXT = {".wav", ".mp3", ".m4a", ".flac", ".ogg"}
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # Enable CORS for all origins in development
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
+TRANSCRIPTS_DIR = os.path.join(BASE_DIR, "transcripts")
+OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+
+for d in (UPLOAD_DIR, TRANSCRIPTS_DIR, OUTPUT_DIR):
+    os.makedirs(d, exist_ok=True)
+
+def save_uploaded_file(file_obj, dest_dir, prefix="upload"):
+    filename = secure_filename(file_obj.filename)
+    ext = os.path.splitext(filename)[1].lower()
+    if ext == "":
+        raise ValueError("Uploaded file missing extension")
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    name = f"{prefix}_{ts}_{uuid.uuid4().hex[:8]}_{filename}"
+    path = os.path.join(dest_dir, name)
+    file_obj.save(path)
+    return path
 
 @app.route("/upload-audio", methods=["POST"])
 def upload_audio():
-    """
-    Main endpoint for processing audio files from Whispering Shadows.
-    Handles single session analysis.
-    """
+    """Single session processing. Expects file under 'file'."""
     try:
-        print("\n=== New Upload Request ===")
-        print("Headers:", dict(request.headers))
-        print("Form data:", dict(request.form))
-        print("Files:", request.files.keys())
-        
-        # Validate file in request
         if "file" not in request.files:
-            print("Error: No file in request. Available keys:", request.files.keys())
-            return jsonify({"error": "No file found in request"}), 400
-        
+            return jsonify({"error": "No file provided under key 'file'"}), 400
+
         file = request.files["file"]
         if file.filename == "":
-            print("Error: Empty filename")
-            return jsonify({"error": "No selected file"}), 400
-        
-        print(f"Received file: {file.filename}")
-        print(f"Content Type: {file.content_type}")
-        print(f"File size: {request.content_length} bytes")
+            return jsonify({"error": "Empty filename"}), 400
 
-        # Get shadow_id from request or generate one
-        shadow_id = request.form.get("shadow_id", f"shadow_{uuid.uuid4().hex[:8]}")
-        
-        # Ensure uploads directory exists and save file
-        os.makedirs("uploads", exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filepath = f"uploads/{shadow_id}_{timestamp}_{file.filename}"
-        file.save(filepath)
+        shadow_id = request.form.get("shadow_id") or f"shadow_{uuid.uuid4().hex[:8]}"
+        saved_path = save_uploaded_file(file, UPLOAD_DIR, prefix=shadow_id)
+        app.logger.info(f"Saved upload: {saved_path}")
 
-        # Run the Truth Weaver pipeline
-        print(f"🔍 Processing Shadow: {shadow_id}")
-        
-        # 1. Preprocess audio (handle poor quality, static, whispers)
-        print("🎵 Cleaning audio...")
-        cleaned_audio = preprocess.clean_audio(filepath)
-        
-        # 2. Transcribe using Whisper
-        print("🎤 Transcribing audio...")
+        cleaned_audio = preprocess.clean_audio(saved_path)
         transcript = stt.transcribe_audio(cleaned_audio)
-        
-        # 3. Postprocess text
-        print("📝 Cleaning transcript...")
         cleaned_text = postprocess.clean_text(transcript)
-        
-        # 4. Analyze for truth and deception patterns
-        print("🕵️ Analyzing for truth and deception...")
-        analysis_result = analyze.extract_truth(cleaned_text, shadow_id)
-        
-        # 5. Generate final output
-        print("📊 Generating analysis...")
-        final_json = {
-            "transcript": cleaned_text,
+
+        # Make analysis accept sessions list for deterministic interface
+        analysis_result = analyze.extract_truth_for_sessions(sessions=[{"session": 1, "text": cleaned_text}], shadow_id=shadow_id)
+
+        # Save files
+        transcript_file = output.save_transcript_single(cleaned_text, shadow_id, session_idx=1, base_dir=TRANSCRIPTS_DIR)
+        final_json_file = output.save_final_json(analysis_result, shadow_id, base_dir=OUTPUT_DIR)
+
+        response = {
             "shadow_id": shadow_id,
+            "transcript": cleaned_text,
+            "transcript_file": transcript_file,
+            "json_file": final_json_file,
             "revealed_truth": analysis_result["revealed_truth"],
-            "deception_patterns": analysis_result["deception_patterns"]
+            "deception_patterns": analysis_result["deception_patterns"],
         }
-        
-        # 6. Save files for submission
-        transcript_file = output.save_transcript(cleaned_text, shadow_id, 1)
-        json_file = output.save_final_json(analysis_result["revealed_truth"], analysis_result["deception_patterns"], shadow_id)
-        
-        # Add file paths to response
-        final_json["transcript_file"] = transcript_file
-        final_json["json_file"] = json_file
-        
-        print(f"✅ Analysis complete for {shadow_id}")
-        return jsonify(final_json)
-        
+        return jsonify(response)
+
     except Exception as e:
-        import traceback
         tb = traceback.format_exc()
-        print(f"❌ Error processing audio: {e}")
-        print(tb)
-        return jsonify({"error": f"Processing failed: {str(e)}", "traceback": tb}), 500
+        app.logger.error(f"Error in /upload-audio: {e}\n{tb}")
+        return jsonify({"error": str(e), "traceback": tb.splitlines()[-10:]}), 500
+
 
 @app.route("/upload-multiple-sessions", methods=["POST"])
 def upload_multiple_sessions():
     """
-    Endpoint for processing multiple sessions for a single shadow.
-    Handles the 5-session structure described in the project.
+    Multi-session: Accepts session_1 ... session_5 as file keys.
     """
     try:
-        shadow_id = request.form.get("shadow_id", f"shadow_{uuid.uuid4().hex[:8]}")
-        sessions_data = []
-        
-        # Process each uploaded file as a separate session
-        for i in range(1, 6):  # Sessions 1-5
-            file_key = f"session_{i}"
-            if file_key in request.files:
-                file = request.files[file_key]
-                if file.filename:
-                    # Save and process each session
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filepath = f"uploads/{shadow_id}_session_{i}_{timestamp}_{file.filename}"
-                    file.save(filepath)
-                    
-                    print(f"Processing session {i} audio file: {filepath}")
-                    try:
-                        # Process this session
-                        print("Cleaning audio...")
-                        cleaned_audio = preprocess.clean_audio(filepath)
-                        print("Transcribing audio...")
-                        transcript = stt.transcribe_audio(cleaned_audio)
-                        print("Cleaning text...")
-                        cleaned_text = postprocess.clean_text(transcript)
-                        print("Analyzing for truth...")
-                        analysis_result = analyze.extract_truth(cleaned_text, shadow_id)
-                    except Exception as e:
-                        print(f"Error processing session {i}: {e}")
-                        continue
-                    
-                    sessions_data.append({
-                        "transcript": cleaned_text,
-                        "revealed_truth": analysis_result["revealed_truth"],
-                        "deception_patterns": analysis_result["deception_patterns"]
-                    })
-        
-        if not sessions_data:
-            return jsonify({"error": "No valid sessions provided"}), 400
-        
-        # Process multiple sessions
-        result = output.process_multiple_sessions(sessions_data, shadow_id)
-        
-        return jsonify(result)
-        
+        shadow_id = request.form.get("shadow_id") or f"shadow_{uuid.uuid4().hex[:8]}"
+        sessions = []
+
+        for i in range(1, 6):
+            key = f"session_{i}"
+            if key in request.files:
+                f = request.files[key]
+                if f and f.filename:
+                    saved_path = save_uploaded_file(f, UPLOAD_DIR, prefix=f"{shadow_id}_s{i}")
+                    app.logger.info(f"Saved session {i}: {saved_path}")
+
+                    cleaned_audio = preprocess.clean_audio(saved_path)
+                    transcript = stt.transcribe_audio(cleaned_audio)
+                    cleaned_text = postprocess.clean_text(transcript)
+
+                    sessions.append({"session": i, "text": cleaned_text})
+
+        if not sessions:
+            return jsonify({"error": "No sessions uploaded (keys session_1..session_5)"}), 400
+
+        analysis_result = analyze.extract_truth_for_sessions(sessions=sessions, shadow_id=shadow_id)
+
+        transcript_files = []
+        for s in sessions:
+            idx = s["session"]
+            tf = output.save_transcript_single(s["text"], shadow_id, session_idx=idx, base_dir=TRANSCRIPTS_DIR)
+            transcript_files.append({"session": idx, "file": tf})
+
+        final_json_file = output.save_final_json(analysis_result, shadow_id, base_dir=OUTPUT_DIR)
+
+        response = {
+            "shadow_id": shadow_id,
+            "transcript_files": transcript_files,
+            "json_file": final_json_file,
+            "revealed_truth": analysis_result["revealed_truth"],
+            "deception_patterns": analysis_result["deception_patterns"],
+        }
+        return jsonify(response)
+
     except Exception as e:
-        print(f"❌ Error processing multiple sessions: {e}")
-        return jsonify({"error": f"Processing failed: {str(e)}"}), 500
+        tb = traceback.format_exc()
+        app.logger.error(f"Error in /upload-multiple-sessions: {e}\n{tb}")
+        return jsonify({"error": str(e), "traceback": tb.splitlines()[-10:]}), 500
+
 
 @app.route("/health", methods=["GET"])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "service": "Truth Weaver - Whispering Shadows Mystery",
-        "version": "1.0.0"
-    })
-
-@app.route("/", methods=["GET"])
-def root():
-    """Root endpoint with service information"""
-    return jsonify({
-        "service": "Truth Weaver - Whispering Shadows Mystery",
-        "description": "AI Detective for analyzing deceptive audio testimonies",
-        "endpoints": {
-            "/upload-audio": "Process single audio session",
-            "/upload-multiple-sessions": "Process multiple sessions for one shadow",
-            "/health": "Health check"
-        }
-    })
+    return jsonify({"status": "healthy", "service": "truth-weaver", "version": "1.0.0"})
 
 if __name__ == "__main__":
-    print("🕵️ Truth Weaver - Whispering Shadows Mystery")
-    print("🔍 AI Detective Service Starting...")
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    app.run(host="0.0.0.0", port=5001, debug=False)

@@ -1,38 +1,34 @@
+// app/api/process/route.js
+export const runtime = "edge"; // optional
+
 export async function POST(req) {
   try {
     const formData = await req.formData();
-    const file = formData.get('file');
-    
-    console.log('Received file:', file?.name, 'Size:', file?.size);
-    
-    if (!file) {
-      return Response.json({ error: 'No file provided' }, { status: 400 });
-    }
+    const sessionKeys = ["session_1","session_2","session_3","session_4","session_5"];
+    const hasSessions = sessionKeys.some(k => formData.get(k) !== null);
 
-    console.log('Sending to backend...');
-    const backendResponse = await fetch('http://localhost:5001/upload-audio', {
-      method: 'POST',
+    const target = hasSessions ? "upload-multiple-sessions" : "upload-audio";
+    const backendUrl = `http://localhost:5001/${target}`;
+
+    const backendResp = await fetch(backendUrl, {
+      method: "POST",
       body: formData,
     });
 
-    console.log('Response status:', backendResponse.status);
-    const rawText = await backendResponse.text();
-    console.log('Raw backend response:', rawText);
-
-    if (!backendResponse.ok) {
-      throw new Error(`HTTP error! status: ${backendResponse.status}\n${rawText}`);
+    const text = await backendResp.text();
+    if (!backendResp.ok) {
+      return new Response(JSON.stringify({ error: `Backend error ${backendResp.status}`, raw: text }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" }
+      });
     }
-
-    // Try to parse JSON if possible
-    let data;
     try {
-      data = JSON.parse(rawText);
+      const data = JSON.parse(text);
+      return new Response(JSON.stringify(data), { status: 200, headers: { "Content-Type": "application/json" } });
     } catch (e) {
-      data = { error: 'Invalid JSON from backend', raw: rawText };
+      return new Response(JSON.stringify({ raw: text }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
-    return Response.json(data);
-  } catch (error) {
-    console.error('Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
