@@ -1,0 +1,6 @@
+Shadow ID: shadow_1757793798203
+Session: 1
+Timestamp: 2025-09-13T20:03:22.604447
+==================================================
+
+Transcription failed: [Errno 2] No such file or directory: 'ffmpeg'
