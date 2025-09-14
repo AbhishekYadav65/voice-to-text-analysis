@@ -78,9 +78,6 @@ def upload_audio():
 
 @app.route("/upload-multiple-sessions", methods=["POST"])
 def upload_multiple_sessions():
-    """
-    Multi-session: Accepts session_1 ... session_5 as file keys.
-    """
     try:
         shadow_id = request.form.get("shadow_id") or f"shadow_{uuid.uuid4().hex[:8]}"
         sessions = []
@@ -91,40 +88,33 @@ def upload_multiple_sessions():
                 f = request.files[key]
                 if f and f.filename:
                     saved_path = save_uploaded_file(f, UPLOAD_DIR, prefix=f"{shadow_id}_s{i}")
-                    app.logger.info(f"Saved session {i}: {saved_path}")
-
                     cleaned_audio = preprocess.clean_audio(saved_path)
                     transcript = stt.transcribe_audio(cleaned_audio)
                     cleaned_text = postprocess.clean_text(transcript)
-
                     sessions.append({"session": i, "text": cleaned_text})
 
         if not sessions:
-            return jsonify({"error": "No sessions uploaded (keys session_1..session_5)"}), 400
+            return jsonify({"error": "No session files uploaded"}), 400
 
-        analysis_result = analyze.extract_truth_for_sessions(sessions=sessions, shadow_id=shadow_id)
+        analysis_result = analyze.extract_truth_for_sessions(sessions, shadow_id=shadow_id)
 
         transcript_files = []
         for s in sessions:
-            idx = s["session"]
-            tf = output.save_transcript_single(s["text"], shadow_id, session_idx=idx, base_dir=TRANSCRIPTS_DIR)
-            transcript_files.append({"session": idx, "file": tf})
+            tf = output.save_transcript_single(s["text"], shadow_id, session_idx=s["session"], base_dir=TRANSCRIPTS_DIR)
+            transcript_files.append({"session": s["session"], "file": tf})
 
         final_json_file = output.save_final_json(analysis_result, shadow_id, base_dir=OUTPUT_DIR)
 
-        response = {
+        return jsonify({
             "shadow_id": shadow_id,
             "transcript_files": transcript_files,
             "json_file": final_json_file,
             "revealed_truth": analysis_result["revealed_truth"],
             "deception_patterns": analysis_result["deception_patterns"],
-        }
-        return jsonify(response)
+        })
 
     except Exception as e:
-        tb = traceback.format_exc()
-        app.logger.error(f"Error in /upload-multiple-sessions: {e}\n{tb}")
-        return jsonify({"error": str(e), "traceback": tb.splitlines()[-10:]}), 500
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/health", methods=["GET"])
