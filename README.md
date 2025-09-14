@@ -1,92 +1,70 @@
-🕵️ Truth Weaver – Whispering Shadows Mystery
+# 🕵️ Truth Weaver – Whispering Shadows Mystery
 
-An AI-powered Digital Detective that listens to deceptive audio testimonies, transcribes them, and extracts the most likely truth by spotting contradictions and unreliable claims.
+An AI-powered **Digital Detective** that listens to deceptive audio testimonies, transcribes them, and extracts the most likely truth by spotting contradictions and unreliable claims.
 
-Built for Rendezvous IIT Delhi Hackathon – Organized by ARIES & Eightfold AI.
+Built for **Rendezvous IIT Delhi Hackathon – Organized by ARIES & Eightfold AI**.
 
-🚀 Features
+---
 
-🎙️ Speech-to-Text: Converts audio (via Whisper) into transcripts.
+## 🚀 Features
+- 🎙️ **Speech-to-Text**: Converts audio (via Whisper) into transcripts.  
+- 🧹 **Preprocessing & Postprocessing**: Cleans noisy, distorted speech.  
+- 🕵️ **Truth Analysis**: Detects contradictions, inflated claims, and fabrications.  
+- 📑 **Hackathon-Compliant Outputs**:
+  - Transcript file (`.txt`) per session.  
+  - Final structured JSON (`.json`) with revealed truth & deception patterns.  
+- 🌐 **Full-Stack App**: Flask backend + Next.js frontend with clean UI.  
+- ⚡ **Multi-Session Support**: Upload up to 5 testimonies per shadow.  
 
-🧹 Preprocessing & Postprocessing: Cleans noisy, distorted speech.
+---
 
-🕵️ Truth Analysis: Detects contradictions, inflated claims, and fabrications.
-
-📑 Hackathon-Compliant Outputs:
-
-Transcript file (.txt) per session.
-
-Final structured JSON (.json) with revealed truth & deception patterns.
-
-🌐 Full-Stack App: Flask backend + Next.js frontend with clean UI.
-
-⚡ Multi-Session Support: Upload up to 5 testimonies per shadow.
-
-📂 Project Structure
+## 📂 Project Structure
 voice-to-text-analysis/
-│── backend/              # Flask backend
-│   ├── app.py            # Main API server
-│   ├── pipeline/         # Processing modules
-│   │   ├── preprocess.py
-│   │   ├── stt.py        # Whisper STT
-│   │   ├── postprocess.py
-│   │   ├── analyze.py    # Truth extraction
-│   │   └── output.py
-│   ├── transcripts/      # Generated .txt transcripts
-│   ├── output/           # Generated .json analysis
-│   ├── requirements.txt  # Python dependencies
+│── backend/ # Flask backend
+│ ├── app.py # Main API server
+│ ├── pipeline/ # Processing modules
+│ │ ├── preprocess.py
+│ │ ├── stt.py # Whisper STT
+│ │ ├── postprocess.py
+│ │ ├── analyze.py # Truth extraction
+│ │ └── output.py
+│ ├── transcripts/ # Generated .txt transcripts
+│ ├── output/ # Generated .json analysis
+│ ├── requirements.txt # Python dependencies
 │
-│── frontend/             # Next.js frontend
-│   ├── src/app/          # App router
-│   │   └── api/          # API routes (proxy to backend)
-│   ├── public/           # Static assets
-│   ├── package.json      # Node dependencies
+│── frontend/ # Next.js frontend
+│ ├── src/app/ # App router
+│ │ └── api/ # API routes (proxy to backend)
+│ ├── public/ # Static assets
+│ ├── package.json # Node dependencies
 │
-└── README.md             # You are here
-
-⚙️ Setup Instructions
-1️⃣ Backend (Flask + Whisper)
-
-Go to backend:
-
-cd backend
+└── README.md # You are here
 
 
-Install dependencies:
+---
 
+## ⚙️ Setup Instructions
+
+### 1️⃣ Backend (Flask + Whisper)
+
+1. Go to backend:
+   ```bash
+   cd backend
 pip install -r requirements.txt
-
-
-If Whisper/ffmpeg missing:
 
 pip install openai-whisper torch torchaudio ffmpeg-python
 sudo apt-get update && sudo apt-get install -y ffmpeg
 
-
-Run backend server:
-
 python app.py
-
 
 Runs on:
 👉 http://localhost:5001
 
-2️⃣ Frontend (Next.js)
-
-Go to frontend:
-
 cd frontend
-
-
-Install dependencies:
 
 npm install
 
-
-Start dev server:
-
 npm run dev
-
 
 Runs on:
 👉 http://localhost:3000
@@ -115,7 +93,7 @@ backend/transcripts/{shadow_id}_session_X.txt
 
 backend/output/{shadow_id}_analysis.json
 
-📑 Output Format (JSON Schema)
+
 {
   "shadow_id": "string",
   "revealed_truth": {
@@ -134,6 +112,7 @@ backend/output/{shadow_id}_analysis.json
   ]
 }
 
+
 🛠 Development Notes
 
 Whisper model can be changed in stt.py (tiny, base, small, medium, large).
@@ -146,6 +125,7 @@ Analysis rules are in pipeline/analyze.py.
 
 Extendable with more NLP logic (for advanced truth inference).
 
+
 🎯 Hackathon Deliverables
 
 ✅ Transcript files (.txt)
@@ -156,6 +136,7 @@ Extendable with more NLP logic (for advanced truth inference).
 
 ⚡ Bonus: Agentic Flow diagram (AI interviewer decision-making)
 
+
 📦 Example Requirements (backend/requirements.txt)
 flask
 flask-cors
@@ -163,6 +144,7 @@ openai-whisper
 torch
 torchaudio
 ffmpeg-python
+
 
 👨‍💻 Author
 
